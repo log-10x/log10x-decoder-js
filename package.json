@@ -1,0 +1,23 @@
+{
+  "name": "@log10x/decoder",
+  "version": "0.9.0",
+  "description": "JavaScript library for decoding Log10x-encoded log events back to their original form",
+  "type": "module",
+  "main": "src/decode.js",
+  "exports": {
+    ".": {
+      "import": "./src/decode.js",
+      "require": "./src/decode.js"
+    }
+  },
+  "scripts": {
+    "test": "node test/decode.test.js"
+  },
+  "keywords": ["log10x", "decoder", "logs", "observability"],
+  "author": "Log10x",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/log-10x/log10x-decoder-js.git"
+  }
+}
