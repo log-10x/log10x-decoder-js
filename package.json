@@ -15,7 +15,7 @@
   },
   "keywords": ["log10x", "decoder", "logs", "observability"],
   "author": "Log10x",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/log-10x/log10x-decoder-js.git"

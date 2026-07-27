@@ -1,6 +1,6 @@
 # Log10x Decoder for JavaScript
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![npm](https://img.shields.io/npm/v/@log10x/decoder.svg)](https://www.npmjs.com/package/@log10x/decoder)
 
 JavaScript library for decoding [Log10x-encoded](https://doc.log10x.com/run/transform/#encoding) log events back to their original form. Log10x losslessly compacts log events by extracting recurring structure into templates and storing only the variable values — this library reverses that process.
@@ -39,7 +39,7 @@ npm test
 
 ## License
 
-This repository is licensed under the [Apache License 2.0](LICENSE).
+This repository is licensed under the [MIT License](LICENSE).
 
 ### Important: Log10x Product License Required
 
@@ -47,7 +47,7 @@ This repository contains a decoder library for Log10x-encoded events. While the 
 
 | Component | License |
 |-----------|---------|
-| This repository (decoder library) | Apache 2.0 (open source) |
+| This repository (decoder library) | MIT (open source) |
 | Log10x Edge Optimizer | Commercial license required |
 
 **What this means:**
