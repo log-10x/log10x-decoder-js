@@ -1,4 +1,4 @@
-import { decodeSingle, createDecoder } from '../src/decode.js';
+import { decodeSingle, createDecoder, formatTimestamp } from '../src/decode.js';
 
 // ─── Java Decoder Test Case ──────────────────────────────────────────────────
 // From DecoderTest.java — space-delimited, $ prefix
@@ -81,5 +81,16 @@ const crDecoder = createDecoder(crTemplates, { delimiter: ',', prefix: '~' });
 const crResult = crDecoder.decode('~cr,4432,C:\\Program Files (x86)\\$Recycle.Bin\\PROGRA~1\\a b.txt');
 assert(crResult === "<Data Name='AccessList'>%%4432\r\n\t</Data><Data Name='ObjectName'>C:\\Program Files (x86)\\$Recycle.Bin\\PROGRA~1\\a b.txt</Data>",
   'A value before CR LF and a path value decode byte for byte');
+
+// Test 9: one pattern letter writes the number without padding, two pad it (DateTimeFormatter)
+const morning = Date.UTC(2024, 0, 15, 5, 5, 9);   // 2024-01-15 05:05:09 UTC
+const evening = Date.UTC(2024, 0, 15, 21, 7, 3);  // 2024-01-15 21:07:03 UTC
+assert(formatTimestamp(morning, 'h:mm:ss a', 0) === '5:05:09 AM', 'h: one digit for 5 AM');
+assert(formatTimestamp(morning, 'hh:mm:ss a', 0) === '05:05:09 AM', 'hh: two digits for 5 AM');
+assert(formatTimestamp(evening, 'h:mm a', 0) === '9:07 PM', 'h: one digit for 9 PM');
+assert(formatTimestamp(morning, 'H:mm', 0) === '5:05', 'H: one digit');
+assert(formatTimestamp(morning, 'HH:mm', 0) === '05:05', 'HH: two digits');
+assert(formatTimestamp(morning, 'HH:m:s', 0) === '05:5:9', 'm and s: one digit');
+assert(formatTimestamp(morning, 'yyyy-MM-dd HH:mm:ss', 0) === '2024-01-15 05:05:09', 'two-letter fields unchanged');
 
 console.log('\nAll tests passed.');
