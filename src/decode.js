@@ -235,28 +235,31 @@ function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
   // This matches the Java core product's FormatterTimestampPattern behavior
   const patternUsesUtc = pattern.indexOf('Z') !== -1 || pattern.indexOf('X') !== -1;
   const tzOffMin = patternUsesUtc ? 0 : (timezoneOffsetMinutes !== undefined ? timezoneOffsetMinutes : -new Date().getTimezoneOffset());
-  const date = new Date(dateMs + tzOffMin * 60000 + new Date(dateMs).getTimezoneOffset() * 60000);
+  // Wall-clock fields are read with the UTC getters from the instant shifted by the
+  // zone offset, so the host's own zone never enters the result. Reading the shifted
+  // instant with the local getters applied the host's offset at the shifted instant;
+  // within a few hours of a host daylight-saving change that offset differs from the
+  // one at the real instant, and those timestamps rendered one hour off.
+  const date = new Date(dateMs + tzOffMin * 60000);
 
-  const yyyy = date.getFullYear();
+  const yyyy = date.getUTCFullYear();
   const yy = pad(yyyy % 100, 2);
-  const MM = pad(date.getMonth() + 1, 2);
-  const dd = pad(date.getDate(), 2);
-  const d = date.getDate();
-  const HH = pad(date.getHours(), 2);
-  const mm = pad(date.getMinutes(), 2);
-  const ss = pad(date.getSeconds(), 2);
-  const SSS = pad(date.getMilliseconds(), 3);
-  const S = String(date.getMilliseconds());
-  const MMM = MONTH_NAMES[date.getMonth()];
+  const MM = pad(date.getUTCMonth() + 1, 2);
+  const dd = pad(date.getUTCDate(), 2);
+  const d = date.getUTCDate();
+  const HH = pad(date.getUTCHours(), 2);
+  const mm = pad(date.getUTCMinutes(), 2);
+  const ss = pad(date.getUTCSeconds(), 2);
+  const MMM = MONTH_NAMES[date.getUTCMonth()];
 
   // 12-hour clock
-  let hh12 = date.getHours() % 12;
+  let hh12 = date.getUTCHours() % 12;
   if (hh12 === 0) hh12 = 12;
   const hh = pad(hh12, 2);
-  const a = date.getHours() < 12 ? 'AM' : 'PM';
+  const a = date.getUTCHours() < 12 ? 'AM' : 'PM';
 
-  // Timezone offset
-  const tzOff = -date.getTimezoneOffset();
+  // Timezone offset: the offset the fields above were rendered in, not the host's
+  const tzOff = tzOffMin;
   const tzSign = tzOff >= 0 ? '+' : '-';
   const tzH = pad(Math.floor(Math.abs(tzOff) / 60), 2);
   const tzM = pad(Math.abs(tzOff) % 60, 2);
@@ -285,7 +288,7 @@ function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
           break;
         case 'M':
           if (count >= 3) result += MMM;
-          else result += count === 2 ? MM : String(date.getMonth() + 1);
+          else result += count === 2 ? MM : String(date.getUTCMonth() + 1);
           break;
         case 'd':
           result += count >= 2 ? dd : String(d);
