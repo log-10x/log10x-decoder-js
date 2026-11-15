@@ -306,16 +306,16 @@ function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
         // H, h, m and s follow DateTimeFormatter: one letter writes the number
         // without padding (5), more letters pad it to that width (05).
         case 'H':
-          result += count === 1 ? String(date.getHours()) : (count === 2 ? HH : pad(date.getHours(), count));
+          result += count === 1 ? String(date.getUTCHours()) : (count === 2 ? HH : pad(date.getUTCHours(), count));
           break;
         case 'h':
           result += count === 1 ? String(hh12) : (count === 2 ? hh : pad(hh12, count));
           break;
         case 'm':
-          result += count === 1 ? String(date.getMinutes()) : (count === 2 ? mm : pad(date.getMinutes(), count));
+          result += count === 1 ? String(date.getUTCMinutes()) : (count === 2 ? mm : pad(date.getUTCMinutes(), count));
           break;
         case 's':
-          result += count === 1 ? String(date.getSeconds()) : (count === 2 ? ss : pad(date.getSeconds(), count));
+          result += count === 1 ? String(date.getUTCSeconds()) : (count === 2 ? ss : pad(date.getUTCSeconds(), count));
           break;
         case 'S':
           // Use nanoFractionStr for all precision levels
