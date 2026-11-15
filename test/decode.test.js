@@ -83,4 +83,14 @@ assert(formatTimestamp(morning, 'HH:mm', 0) === '05:05', 'HH: two digits');
 assert(formatTimestamp(morning, 'HH:m:s', 0) === '05:5:9', 'm and s: one digit');
 assert(formatTimestamp(morning, 'yyyy-MM-dd HH:mm:ss', 0) === '2024-01-15 05:05:09', 'two-letter fields unchanged');
 
+// Test 9: a value at the end of a line of a grouped event, before CR LF, and values
+// that hold the characters of a Windows path (spaces, backslashes, parentheses, $, ~)
+const crTemplates = {
+  'cr': "<Data Name='AccessList'>%%$\r\n\t</Data><Data Name='ObjectName'>$</Data>",
+};
+const crDecoder = createDecoder(crTemplates, { delimiter: ',', prefix: '~' });
+const crResult = crDecoder.decode('~cr,4432,C:\\Program Files (x86)\\$Recycle.Bin\\PROGRA~1\\a b.txt');
+assert(crResult === "<Data Name='AccessList'>%%4432\r\n\t</Data><Data Name='ObjectName'>C:\\Program Files (x86)\\$Recycle.Bin\\PROGRA~1\\a b.txt</Data>",
+  'A value before CR LF and a path value decode byte for byte');
+
 console.log('\nAll tests passed.');
