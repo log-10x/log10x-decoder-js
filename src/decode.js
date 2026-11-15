@@ -195,6 +195,11 @@ function pad(n, len) {
 /**
  * Converts a Java-style DateTimeFormatter pattern to a formatted date string.
  * Handles the most common patterns found in log timestamps.
+ *
+ * timezoneOffsetMinutes is a fixed offset in minutes east of UTC, or a zone name such
+ * as 'America/New_York', or undefined for the system zone. For a zone name and for the
+ * system zone the offset is taken at the timestamp's own instant, so daylight saving
+ * applies as it does in the Java decoder's ZoneId.
  */
 function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
   // Epoch patterns — just return the number/string
@@ -234,29 +239,36 @@ function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
   // Per-pattern timezone: patterns with Z or X use UTC, others use configured timezone
   // This matches the Java core product's FormatterTimestampPattern behavior
   const patternUsesUtc = pattern.indexOf('Z') !== -1 || pattern.indexOf('X') !== -1;
-  const tzOffMin = patternUsesUtc ? 0 : (timezoneOffsetMinutes !== undefined ? timezoneOffsetMinutes : -new Date().getTimezoneOffset());
-  const date = new Date(dateMs + tzOffMin * 60000 + new Date(dateMs).getTimezoneOffset() * 60000);
+  let tzOffMin;
+  if (patternUsesUtc) tzOffMin = 0;
+  else if (typeof timezoneOffsetMinutes === 'string') tzOffMin = zoneOffsetAt(timezoneOffsetMinutes, dateMs);
+  else if (timezoneOffsetMinutes !== undefined) tzOffMin = timezoneOffsetMinutes;
+  else tzOffMin = -new Date(dateMs).getTimezoneOffset();
+  // Wall-clock fields are read with the UTC getters from the instant shifted by the
+  // zone offset, so the host's own zone never enters the result. Reading the shifted
+  // instant with the local getters applied the host's offset at the shifted instant;
+  // within a few hours of a host daylight-saving change that offset differs from the
+  // one at the real instant, and those timestamps rendered one hour off.
+  const date = new Date(dateMs + tzOffMin * 60000);
 
-  const yyyy = date.getFullYear();
+  const yyyy = date.getUTCFullYear();
   const yy = pad(yyyy % 100, 2);
-  const MM = pad(date.getMonth() + 1, 2);
-  const dd = pad(date.getDate(), 2);
-  const d = date.getDate();
-  const HH = pad(date.getHours(), 2);
-  const mm = pad(date.getMinutes(), 2);
-  const ss = pad(date.getSeconds(), 2);
-  const SSS = pad(date.getMilliseconds(), 3);
-  const S = String(date.getMilliseconds());
-  const MMM = MONTH_NAMES[date.getMonth()];
+  const MM = pad(date.getUTCMonth() + 1, 2);
+  const dd = pad(date.getUTCDate(), 2);
+  const d = date.getUTCDate();
+  const HH = pad(date.getUTCHours(), 2);
+  const mm = pad(date.getUTCMinutes(), 2);
+  const ss = pad(date.getUTCSeconds(), 2);
+  const MMM = MONTH_NAMES[date.getUTCMonth()];
 
   // 12-hour clock
-  let hh12 = date.getHours() % 12;
+  let hh12 = date.getUTCHours() % 12;
   if (hh12 === 0) hh12 = 12;
   const hh = pad(hh12, 2);
-  const a = date.getHours() < 12 ? 'AM' : 'PM';
+  const a = date.getUTCHours() < 12 ? 'AM' : 'PM';
 
-  // Timezone offset
-  const tzOff = -date.getTimezoneOffset();
+  // Timezone offset: the offset the fields above were rendered in, not the host's
+  const tzOff = tzOffMin;
   const tzSign = tzOff >= 0 ? '+' : '-';
   const tzH = pad(Math.floor(Math.abs(tzOff) / 60), 2);
   const tzM = pad(Math.abs(tzOff) % 60, 2);
@@ -285,7 +297,7 @@ function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
           break;
         case 'M':
           if (count >= 3) result += MMM;
-          else result += count === 2 ? MM : String(date.getMonth() + 1);
+          else result += count === 2 ? MM : String(date.getUTCMonth() + 1);
           break;
         case 'd':
           result += count >= 2 ? dd : String(d);
@@ -730,17 +742,43 @@ function tokenizeEvent(input, delimiter, timestampCount) {
   return { values, timestampEpochs };
 }
 
+const zoneOffsetFormatters = new Map();
+const zoneOffsetHours = new Map();
+const HOUR_MS = 3600000;
+
 /**
- * Converts a timezone name to offset in minutes east of UTC.
+ * The offset of a named zone at an instant, remembered per zone for the UTC hour that
+ * holds it when the offset is the same at both ends of that hour (zones change offset
+ * at most once in any hour), so time-ordered events rarely call Intl.
+ */
+function zoneOffsetAt(tz, ms) {
+  const hourStart = Math.floor(ms / HOUR_MS) * HOUR_MS;
+  const known = zoneOffsetHours.get(tz);
+  if (known && known.hourStart === hourStart) return known.offset;
+  const offset = getTimezoneOffsetMinutes(tz, new Date(ms));
+  if (getTimezoneOffsetMinutes(tz, new Date(hourStart)) === offset &&
+      getTimezoneOffsetMinutes(tz, new Date(hourStart + HOUR_MS - 1)) === offset) {
+    zoneOffsetHours.set(tz, { hourStart, offset });
+  }
+  return offset;
+}
+
+/**
+ * Converts a timezone name to its offset in minutes east of UTC at a given instant.
  * @param {string} tz - Timezone name (e.g., 'UTC', 'America/New_York')
+ * @param {Date} [at=new Date()] - The instant; the offset differs across daylight saving
  * @returns {number} Minutes east of UTC
  */
-function getTimezoneOffsetMinutes(tz) {
-  const dt = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    timeZoneName: 'shortOffset'
-  });
-  const parts = dt.formatToParts(new Date());
+function getTimezoneOffsetMinutes(tz, at) {
+  let dt = zoneOffsetFormatters.get(tz);
+  if (!dt) {
+    dt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset'
+    });
+    zoneOffsetFormatters.set(tz, dt);
+  }
+  const parts = dt.formatToParts(at || new Date());
   const tzPart = parts.find(p => p.type === 'timeZoneName');
   if (!tzPart) return 0;
   const val = tzPart.value; // e.g., "GMT", "GMT-4", "GMT+5:30"
@@ -763,8 +801,8 @@ function getTimezoneOffsetMinutes(tz) {
  * @param {Object} [options] - Optional configuration
  * @param {string} [options.delimiter=' '] - Value delimiter in encoded events
  * @param {Set<string>} [options.timestampPatterns] - Known timestamp patterns
- * @param {string} [options.timezone] - Timezone name (e.g., 'UTC', 'America/New_York'). Overrides timezoneOffsetMinutes.
- * @param {number} [options.timezoneOffsetMinutes] - Minutes east of UTC (e.g., -240 for UTC-4). Defaults to system timezone.
+ * @param {string} [options.timezone] - Timezone name (e.g., 'UTC', 'America/New_York'), used when timezoneOffsetMinutes is not given. Daylight saving applies per timestamp.
+ * @param {number} [options.timezoneOffsetMinutes] - Minutes east of UTC (e.g., -240 for UTC-4). Defaults to system timezone, with daylight saving per timestamp.
  * @returns {string} The decoded (original) event
  */
 function decodeSingle(encodedValues, templateStr, options) {
@@ -772,11 +810,9 @@ function decodeSingle(encodedValues, templateStr, options) {
   const patterns = (options && options.timestampPatterns) || DEFAULT_TIMESTAMP_PATTERNS;
   let tzOffset = options && options.timezoneOffsetMinutes;
   if (tzOffset === undefined && options && options.timezone) {
-    const now = new Date();
-    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-    const tzMs = new Date(utcMs).toLocaleString('en-US', { timeZone: options.timezone });
-    const tzDate = new Date(tzMs);
-    tzOffset = Math.round((tzDate.getTime() - utcMs) / 60000);
+    // Keep the name: formatTimestamp takes the zone's offset at each timestamp's instant.
+    getTimezoneOffsetMinutes(options.timezone); // an unknown zone throws RangeError here
+    tzOffset = options.timezone;
   }
 
   const template = parseTemplate(templateStr, patterns);
@@ -810,8 +846,8 @@ function decodeSingle(encodedValues, templateStr, options) {
  * @param {string} [options.delimiter=','] - Value delimiter (default comma for console format)
  * @param {string} [options.prefix='~'] - Encoded line prefix (default ~ for console format)
  * @param {Set<string>} [options.timestampPatterns] - Known timestamp patterns
- * @param {string} [options.timezone] - Timezone name (e.g., 'UTC', 'America/New_York'). Overrides timezoneOffsetMinutes.
- * @param {number} [options.timezoneOffsetMinutes] - Minutes east of UTC (e.g., -240 for UTC-4). Defaults to system timezone.
+ * @param {string} [options.timezone] - Timezone name (e.g., 'UTC', 'America/New_York'), used when timezoneOffsetMinutes is not given. Daylight saving applies per timestamp.
+ * @param {number} [options.timezoneOffsetMinutes] - Minutes east of UTC (e.g., -240 for UTC-4). Defaults to system timezone, with daylight saving per timestamp.
  * @returns {{ decode: function(string): string|null, decodeAll: function(string[]): string[] }}
  */
 function createDecoder(templates, options) {
@@ -820,7 +856,9 @@ function createDecoder(templates, options) {
   const patterns = (options && options.timestampPatterns) || DEFAULT_TIMESTAMP_PATTERNS;
   let tzOffset = options && options.timezoneOffsetMinutes;
   if (tzOffset === undefined && options && options.timezone) {
-    tzOffset = getTimezoneOffsetMinutes(options.timezone);
+    // Keep the name: formatTimestamp takes the zone's offset at each timestamp's instant.
+    getTimezoneOffsetMinutes(options.timezone); // an unknown zone throws RangeError here
+    tzOffset = options.timezone;
   }
 
   // Cache compiled templates
