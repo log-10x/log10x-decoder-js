@@ -72,4 +72,14 @@ console.log('Timestamp decoded:', tsResult);
 assert(tsResult.includes('1710864000000'), 'Epoch timestamp rendered');
 assert(tsResult.includes('MyService started'), 'Value after timestamp works');
 
+// Test 8: a value at the end of a line of a grouped event, before CR LF, and values
+// that hold the characters of a Windows path (spaces, backslashes, parentheses, $, ~)
+const crTemplates = {
+  'cr': "<Data Name='AccessList'>%%$\r\n\t</Data><Data Name='ObjectName'>$</Data>",
+};
+const crDecoder = createDecoder(crTemplates, { delimiter: ',', prefix: '~' });
+const crResult = crDecoder.decode('~cr,4432,C:\\Program Files (x86)\\$Recycle.Bin\\PROGRA~1\\a b.txt');
+assert(crResult === "<Data Name='AccessList'>%%4432\r\n\t</Data><Data Name='ObjectName'>C:\\Program Files (x86)\\$Recycle.Bin\\PROGRA~1\\a b.txt</Data>",
+  'A value before CR LF and a path value decode byte for byte');
+
 console.log('\nAll tests passed.');
