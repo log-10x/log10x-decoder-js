@@ -1,6 +1,6 @@
 {
   "name": "@log10x/decoder",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "JavaScript library for decoding Log10x-encoded log events back to their original form",
   "type": "module",
   "main": "src/decode.js",
