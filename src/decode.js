@@ -755,6 +755,24 @@ function tokenizeEvent(input, delimiter, timestampCount) {
   return { values, timestampEpochs };
 }
 
+// Patterns whose value is the epoch text read from the source: the value is written
+// back as it was encoded, with its fraction, dot and leading zeros, never through a number.
+const EPOCH_TEXT_PATTERNS = new Set(['epoch', 'epochNano', '+%s', '+%s.%N']);
+
+/**
+ * Renders one timestamp segment of a tokenized event. A date pattern formats the epoch;
+ * an epoch pattern writes the value text unchanged (timestamps are the first values).
+ */
+function renderTimestamp(event, seg, tzOffset) {
+  if (EPOCH_TEXT_PATTERNS.has(seg.pattern)) {
+    const text = event.values[seg.timestampIndex];
+    return text === undefined ? '' : text;
+  }
+  const epoch = event.timestampEpochs[seg.timestampIndex];
+  if (epoch === undefined || epoch === -1) return '';
+  return formatTimestamp(epoch, seg.pattern, tzOffset);
+}
+
 const zoneOffsetFormatters = new Map();
 const zoneOffsetHours = new Map();
 const HOUR_MS = 3600000;
@@ -839,10 +857,7 @@ function decodeSingle(encodedValues, templateStr, options) {
       const val = event.values[seg.index];
       if (val !== undefined) result += val;
     } else if (seg.type === SEG_TIMESTAMP) {
-      const epoch = event.timestampEpochs[seg.timestampIndex];
-      if (epoch !== undefined && epoch !== -1) {
-        result += formatTimestamp(epoch, seg.pattern, tzOffset);
-      }
+      result += renderTimestamp(event, seg, tzOffset);
     }
   }
 
@@ -922,10 +937,7 @@ function createDecoder(templates, options) {
         const val = event.values[seg.index];
         if (val !== undefined) result += val;
       } else if (seg.type === SEG_TIMESTAMP) {
-        const epoch = event.timestampEpochs[seg.timestampIndex];
-        if (epoch !== undefined && epoch !== -1) {
-          result += formatTimestamp(epoch, seg.pattern, tzOffset);
-        }
+        result += renderTimestamp(event, seg, tzOffset);
       }
     }
 

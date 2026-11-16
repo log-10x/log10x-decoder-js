@@ -121,4 +121,28 @@ assert(dow.decode('~ctime,1794733507000') === 'job ran at Sun Nov 15 09:05:07 20
 assert(dow.decode('~full,1794733507000,1794733507000') === 'Sunday 15 Nov 2026 S', 'EEEE: full name, EEEEE: first letter');
 assert(dow.decode('~rfc,1794733507000') === 'Sun, 15 Nov 2026 09:05:07 GMT', 'EEE, with a comma after it');
 
+// Test: an epoch timestamp is written back as its text. The 10x Engine reads an epoch in
+// milliseconds with a fraction as the pattern +%s.%N and carries the text it read;
+// templates and lines below have the shape of its output.
+const epochTemplates = {
+  'ms': '$(+%s.%N) INFO epoch ms fraction $ digits',
+  'json': '{"ts":$(+%s.%N),"msg":"$"}',
+  'ns': '$(+%s) INFO epoch ns',
+};
+const epochDecoder = createDecoder(epochTemplates, { delimiter: ',', prefix: '~', timezoneOffsetMinutes: 0 });
+assert(epochDecoder.decode('~ms,1705313472123.456,3') === '1705313472123.456 INFO epoch ms fraction 3 digits',
+  '+%s.%N: milliseconds with a fraction keep the dot');
+assert(epochDecoder.decode('~ms,1705313472123.000456,6') === '1705313472123.000456 INFO epoch ms fraction 6 digits',
+  '+%s.%N: leading zeros of the fraction are kept');
+assert(epochDecoder.decode('~ms,1705313472123.456789123,9') === '1705313472123.456789123 INFO epoch ms fraction 9 digits',
+  '+%s.%N: nine fraction digits are not rounded');
+assert(epochDecoder.decode('~ms,1705313472123.0,0') === '1705313472123.0 INFO epoch ms fraction 0 digits',
+  '+%s.%N: a zero fraction is kept');
+assert(epochDecoder.decode('~json,1705313472123.456789,started') === '{"ts":1705313472123.456789,"msg":"started"}',
+  '+%s.%N: in a JSON line');
+assert(epochDecoder.decode('~ns,1705313472123456789') === '1705313472123456789 INFO epoch ns',
+  '+%s: a nanosecond epoch is written as read');
+assert(decodeSingle('1705313472123.5', '$(+%s.%N)', { delimiter: ',' }) === '1705313472123.5',
+  'decodeSingle: +%s.%N keeps the fraction');
+
 console.log('\nAll tests passed.');
