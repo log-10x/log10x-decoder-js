@@ -1,4 +1,4 @@
-import { decodeSingle, createDecoder, formatTimestamp } from '../src/decode.js';
+import { decodeSingle, createDecoder, formatTimestamp, parseTemplate, tokenizeEvent, DEFAULT_TIMESTAMP_PATTERNS } from '../src/decode.js';
 
 // ─── Java Decoder Test Case ──────────────────────────────────────────────────
 // From DecoderTest.java — space-delimited, $ prefix
@@ -144,5 +144,36 @@ assert(epochDecoder.decode('~ns,1705313472123456789') === '1705313472123456789 I
   '+%s: a nanosecond epoch is written as read');
 assert(decodeSingle('1705313472123.5', '$(+%s.%N)', { delimiter: ',' }) === '1705313472123.5',
   'decodeSingle: +%s.%N keeps the fraction');
+
+// Test: seconds since the epoch with a fraction, $(+%s.%f). The value is the text the
+// 10x Engine read; it is written back as is, and the event time is read from its digits.
+// Templates and lines are the engine's output for the source lines.
+const secondsTemplates = {
+  'Q<C9E6L.6o': 'type=SYSCALL msg=audit($(+%s.%f):$): arch=$ syscall=$',
+  'IE{DdzvP[H': 'ts=$(+%s.%f) msg=hello',
+};
+const seconds = createDecoder(secondsTemplates, { delimiter: ',', prefix: '~', timezoneOffsetMinutes: 0 });
+assert(seconds.decode('~Q<C9E6L.6o,1723042099.699,13369,c000003e,59') === 'type=SYSCALL msg=audit(1723042099.699:13369): arch=c000003e syscall=59',
+  '+%s.%f: an audit record comes back as it was');
+assert(seconds.decode('~IE{DdzvP[H,1705313472.123') === 'ts=1705313472.123 msg=hello', '+%s.%f: a logfmt line comes back as it was');
+assert(seconds.decode('~IE{DdzvP[H,1723042099.600') === 'ts=1723042099.600 msg=hello', '+%s.%f: trailing zeros are kept');
+assert(seconds.decode('~IE{DdzvP[H,1723042099.6') === 'ts=1723042099.6 msg=hello', '+%s.%f: one fraction digit is kept');
+const secondsSlots = parseTemplate('ts=$(+%s.%f) msg=hello', DEFAULT_TIMESTAMP_PATTERNS).timestampPatterns;
+const timeOf = (v) => tokenizeEvent(v, ',', 1, secondsSlots).timestampEpochs[0];
+assert(timeOf('1723042099.699') === Date.UTC(2024, 7, 7, 14, 48, 19, 699), '+%s.%f: event time of 3 fraction digits, in ms');
+assert(timeOf('1723042099.6') === Date.UTC(2024, 7, 7, 14, 48, 19, 600), '+%s.%f: one digit is tenths of a second, never 1970');
+assert(timeOf('1705313472.022663733') === '1705313472022663733', '+%s.%f: nine digits give nanoseconds');
+assert(timeOf('17230420.99') === -1 && timeOf('1723042099') === -1, '+%s.%f: a value of another shape gives no time');
+assert(seconds.decode('~IE{DdzvP[H,17230420.99') === 'ts=17230420.99 msg=hello', '+%s.%f: a value of another shape keeps its text');
+const millisSlots = parseTemplate('$(+%s.%N) INFO x', DEFAULT_TIMESTAMP_PATTERNS).timestampPatterns;
+assert(tokenizeEvent('1705313472123.456', ',', 1, millisSlots).timestampEpochs[0] === '1705313472123456000',
+  '+%s.%N: milliseconds with a fraction give nanoseconds, never 1970');
+
+// Test: a multi-line event's template joins its lines with the break each line was read
+// with, LF, CR LF or a CR alone; a value slot right before either kind of CR is a slot.
+const loneCrTemplates = { 'w': "<Data Name='AccessList'>%%$\r\t\t\t\t%%$\r\n\t\t\t\t<//Data>\n<Data Name='AccessMask'>$<//Data>" };
+const loneCr = createDecoder(loneCrTemplates, { delimiter: ',', prefix: '~' });
+assert(loneCr.decode('~w,4432,4433,0x1') === "<Data Name='AccessList'>%%4432\r\t\t\t\t%%4433\r\n\t\t\t\t</Data>\n<Data Name='AccessMask'>0x1</Data>",
+  'A lone CR and a CR LF inside an event: slots before them are values');
 
 console.log('\nAll tests passed.');
