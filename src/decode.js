@@ -890,10 +890,16 @@ function createDecoder(templates, options) {
 
     const withoutPrefix = line.substring(prefix.length);
     const firstDelim = withoutPrefix.indexOf(delimiter);
-    if (firstDelim === -1) return line; // hash only, no values
 
-    const hash = withoutPrefix.substring(0, firstDelim);
-    const values = withoutPrefix.substring(firstDelim + 1);
+    // An event whose template has no value slot is written as the hash alone
+    // ("~<hash>", no delimiter). It decodes to the template's text when the hash
+    // is a known template; any other line without a delimiter passes through.
+    if (firstDelim === -1) {
+      if (!getTemplate(withoutPrefix)) return line;
+    }
+
+    const hash = firstDelim === -1 ? withoutPrefix : withoutPrefix.substring(0, firstDelim);
+    const values = firstDelim === -1 ? '' : withoutPrefix.substring(firstDelim + 1);
 
     const template = getTemplate(hash);
     if (!template) return null; // template not found
