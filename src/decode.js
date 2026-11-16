@@ -386,10 +386,13 @@ function parseTemplate(templateStr, timestampPatterns) {
     tokenSize++;
   }
 
+  // A character is escaped when an odd number of escape characters runs up to it: the
+  // template writes '/' as '//' and '$' as '/$', so '///$' is an escaped '/' followed by
+  // an escaped '$' (the source text '/$'), not an escaped '/' and a value slot.
   function currCharEscaped() {
-    if (currCharIndex > 1 && chars[currCharIndex - 1] === VAR_ESCAPE && chars[currCharIndex - 2] !== VAR_ESCAPE) return true;
-    if (currCharIndex === 1 && chars[currCharIndex - 1] === VAR_ESCAPE) return true;
-    return false;
+    let run = 0;
+    for (let i = currCharIndex - 1; i >= 0 && chars[i] === VAR_ESCAPE; i--) run++;
+    return run % 2 === 1;
   }
 
   function getTimestamp() {

@@ -176,4 +176,16 @@ const loneCr = createDecoder(loneCrTemplates, { delimiter: ',', prefix: '~' });
 assert(loneCr.decode('~w,4432,4433,0x1') === "<Data Name='AccessList'>%%4432\r\t\t\t\t%%4433\r\n\t\t\t\t</Data>\n<Data Name='AccessMask'>0x1</Data>",
   'A lone CR and a CR LF inside an event: slots before them are values');
 
+// Test: the template writes '/' as '//' and '$' as '/$', so a '$' right after a '/' in the
+// source text is '///$': an escaped '/' and an escaped '$', never a value slot or the start
+// of a timestamp. The PowerShell line is the shape of a script block the engine encoded.
+const escTemplates = {
+  'ps': "$(yyyy-MM-dd'T'HH:mm:ss.SSS'Z') /$proxy = \"http://///$(/$json.connectionConfig.$):/$(/$json.connectionConfig.port)\" pid $",
+  'paths': 'copy ///$ to ////$ and ///$1',
+};
+const esc = createDecoder(escTemplates, { delimiter: ',', prefix: '~', timezoneOffsetMinutes: 0 });
+assert(esc.decode('~ps,1686917430521,host,4592') === '2023-06-16T12:10:30.521Z $proxy = "http://$($json.connectionConfig.host):$($json.connectionConfig.port)" pid 4592',
+  "Escaped '$' after an escaped '/': a script's $( is text, not a timestamp");
+assert(esc.decode('~paths,tmp') === 'copy /$ to //tmp and /$1', "Runs of escaped '/' before '$'");
+
 console.log('\nAll tests passed.');
