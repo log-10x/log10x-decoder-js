@@ -186,6 +186,7 @@ function unescapeJson(str) {
 // ─── Timestamp Formatting ────────────────────────────────────────────────────
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 function pad(n, len) {
   let s = String(n);
@@ -325,6 +326,13 @@ function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
         case 'z':
           result += ZZZZ;
           break;
+        case 'E': {
+          // day of the week, as DateTimeFormatter writes it in English: 1-3 letters
+          // short (Tue), 4 the full name (Tuesday), 5 the first letter (T)
+          const day = DAY_NAMES[date.getUTCDay()];
+          result += count <= 3 ? day.substring(0, 3) : (count === 4 ? day : day.substring(0, 1));
+          break;
+        }
         case 'a':
           result += a;
           break;

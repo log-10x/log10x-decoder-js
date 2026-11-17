@@ -109,4 +109,16 @@ assert(valueFree.decode('~->GI_L4yVkB,') === 'space C:\\Windows\\beta.exe and mo
 assert(valueFree.decode('~notahash') === '~notahash',
   'Line without a delimiter whose text is no known hash passes through');
 
+// Test: day of the week (pattern letter E), as in the engine's shipped patterns
+// "EEE MMM dd HH:mm:ss yyyy" and "EEE, dd MMM yyyy HH:mm:ss zzz"
+const dowTemplates = {
+  'ctime': 'job ran at $(EEE MMM dd HH:mm:ss yyyy)',
+  'full': '$(EEEE dd MMM yyyy) $(EEEEE)',
+  'rfc': '$(EEE, dd MMM yyyy HH:mm:ss) GMT',
+};
+const dow = createDecoder(dowTemplates, { delimiter: ',', prefix: '~', timezoneOffsetMinutes: 0 });
+assert(dow.decode('~ctime,1794733507000') === 'job ran at Sun Nov 15 09:05:07 2026', 'EEE: short day name');
+assert(dow.decode('~full,1794733507000,1794733507000') === 'Sunday 15 Nov 2026 S', 'EEEE: full name, EEEEE: first letter');
+assert(dow.decode('~rfc,1794733507000') === 'Sun, 15 Nov 2026 09:05:07 GMT', 'EEE, with a comma after it');
+
 console.log('\nAll tests passed.');
