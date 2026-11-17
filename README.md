@@ -21,6 +21,17 @@ import { decode } from '@log10x/decoder';
 const original = decode(templatePattern, encodedEvent);
 ```
 
+To read a compact stream line by line:
+
+```javascript
+import { createDecoder } from '@log10x/decoder';
+
+const decoder = createDecoder(templates); // template hash -> template, from the template records
+const event = decoder.decode(line);
+```
+
+A line that begins with `~` is decoded. Any other line is an event its encoder wrote as its own text, and is returned as read. A `~` line whose template the decoder does not hold is also returned as read.
+
 ## Also Available
 
 - **Java** — [log10x-decoder-java](https://github.com/log-10x/log10x-decoder-java) — Core library + CLI tool, Maven Central

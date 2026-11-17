@@ -918,7 +918,7 @@ function decodeSingle(encodedValues, templateStr, options) {
  * @param {Set<string>} [options.timestampPatterns] - Known timestamp patterns
  * @param {string} [options.timezone] - Timezone name (e.g., 'UTC', 'America/New_York'), used when timezoneOffsetMinutes is not given. Daylight saving applies per timestamp.
  * @param {number} [options.timezoneOffsetMinutes] - Minutes east of UTC (e.g., -240 for UTC-4). Defaults to system timezone, with daylight saving per timestamp.
- * @returns {{ decode: function(string): string|null, decodeAll: function(string[]): string[] }}
+ * @returns {{ decode: function(string): string, decodeAll: function(string[]): string[] }}
  */
 function createDecoder(templates, options) {
   const delimiter = (options && options.delimiter) || ',';
@@ -946,12 +946,20 @@ function createDecoder(templates, options) {
   }
 
   /**
-   * Decodes a single encoded line.
-   * @param {string} line - Full encoded line (e.g., "~hash,val1,val2,...")
-   * @returns {string|null} Decoded original event, or null if template not found
+   * Decodes a single line of a compact stream.
+   *
+   * A line that does not begin with the prefix is an event its encoder wrote as
+   * its own text (FORMAT_SPEC S4.1): it is returned as read, whatever it holds,
+   * even when the text before its first delimiter is a known template hash. A
+   * line that begins with the prefix and names a template this decoder does not
+   * hold is also returned as read: its template record is missing, and the
+   * caller keeps the line instead of losing it.
+   *
+   * @param {string} line - A line of the stream (e.g., "~hash,val1,val2,...")
+   * @returns {string} The decoded event, or the line as read
    */
   function decode(line) {
-    if (!line || !line.startsWith(prefix)) return line; // non-compact event
+    if (!line || !line.startsWith(prefix)) return line; // an event written as its text
 
     const withoutPrefix = line.substring(prefix.length);
     const firstDelim = withoutPrefix.indexOf(delimiter);
@@ -967,7 +975,7 @@ function createDecoder(templates, options) {
     const values = firstDelim === -1 ? '' : withoutPrefix.substring(firstDelim + 1);
 
     const template = getTemplate(hash);
-    if (!template) return null; // template not found
+    if (!template) return line; // template not held: the line as read
 
     const event = tokenizeEvent(values, delimiter, template.timestampCount, template.timestampPatterns);
 
@@ -987,9 +995,10 @@ function createDecoder(templates, options) {
   }
 
   /**
-   * Decodes multiple encoded lines.
-   * @param {string[]} lines - Array of encoded lines
-   * @returns {string[]} Array of decoded lines (null for lines with missing templates)
+   * Decodes multiple lines of a compact stream.
+   * @param {string[]} lines - Array of lines
+   * @returns {string[]} Array of decoded lines; a line that is not encoded, or whose
+   *   template is not held, is returned as read
    */
   function decodeAll(lines) {
     return lines.map(decode);

@@ -46,10 +46,24 @@ assert(consoleDecoded.includes('"container_id":"80d793bf"'), 'Console test: cont
 const passthrough = decoder.decode('regular log line');
 assert(passthrough === 'regular log line', 'Non-compact line passes through');
 
-// Test 4: Missing template returns null
+// Test 4: A line whose template is not held is returned as read, not lost
 const decoder2 = createDecoder({}, { delimiter: ',', prefix: '~' });
 const missing = decoder2.decode('~unknownhash,val1,val2');
-assert(missing === null, 'Missing template returns null');
+assert(missing === '~unknownhash,val1,val2', 'Missing template: the line as read');
+
+// Test 4b: Lines an encoder wrote as their own text (an event whose shape had no
+// template yet) pass through untouched, whatever they hold: a line whose text
+// before its first comma is a known hash, a JSON line, an empty line, a line of
+// only commas. Only a line that begins with ~ is decoded.
+const wholeTemplates = { 'h1': 'user $ logged in' };
+const wholeDecoder = createDecoder(wholeTemplates, { delimiter: ',', prefix: '~' });
+for (const line of ['h1,bob', '{"eventVersion":"1.08","a":1}', '', ',,,', 'h1', 'user carol logged in']) {
+  assert(wholeDecoder.decode(line) === line, 'Line written as text passes through: ' + JSON.stringify(line));
+}
+assert(wholeDecoder.decode('~h1,alice') === 'user alice logged in', 'An encoded line beside them is decoded');
+const mixed = wholeDecoder.decodeAll(['~h1,alice', 'h1,bob', '~h2,x', 'plain']);
+assert(JSON.stringify(mixed) === JSON.stringify(['user alice logged in', 'h1,bob', '~h2,x', 'plain']),
+  'decodeAll keeps every line, in order: ' + JSON.stringify(mixed));
 
 // Test 5: Multiple events
 const results = decoder.decodeAll([consoleLine, 'plain line']);
