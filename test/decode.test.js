@@ -93,4 +93,20 @@ assert(formatTimestamp(morning, 'HH:mm', 0) === '05:05', 'HH: two digits');
 assert(formatTimestamp(morning, 'HH:m:s', 0) === '05:5:9', 'm and s: one digit');
 assert(formatTimestamp(morning, 'yyyy-MM-dd HH:mm:ss', 0) === '2024-01-15 05:05:09', 'two-letter fields unchanged');
 
+// Test: an event whose template has no value slot. The 10x Engine writes it as the hash
+// alone, with no delimiter. Lines and templates below are its output (1.1.180).
+const valueFreeTemplates = {
+  '->GI_L4yVkB': 'space C:\\Windows\\beta.exe and more',
+  ';Uvy[i10Xn': 'ads C:\\Users\\alice\\file.txt:Zone.Identifier:/$DATA',
+};
+const valueFree = createDecoder(valueFreeTemplates, { delimiter: ',', prefix: '~' });
+assert(valueFree.decode('~->GI_L4yVkB') === 'space C:\\Windows\\beta.exe and more',
+  'Hash-only line decodes to its template text');
+assert(valueFree.decode('~;Uvy[i10Xn') === 'ads C:\\Users\\alice\\file.txt:Zone.Identifier:$DATA',
+  'Hash-only line: template escapes are undone');
+assert(valueFree.decode('~->GI_L4yVkB,') === 'space C:\\Windows\\beta.exe and more',
+  'Hash followed by an empty value list decodes the same');
+assert(valueFree.decode('~notahash') === '~notahash',
+  'Line without a delimiter whose text is no known hash passes through');
+
 console.log('\nAll tests passed.');
