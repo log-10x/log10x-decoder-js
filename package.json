@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "test": "node test/decode.test.js && node test/timestamp-zone.test.js"
+    "test": "node test/decode.test.js && node test/timestamp-zone.test.js && node test/line-end-vectors.test.js"
   },
   "keywords": ["log10x", "decoder", "logs", "observability"],
   "author": "Log10x",
