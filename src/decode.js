@@ -10,11 +10,12 @@
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const TOKEN_DELIMS = '<>|. ][:-+/*=\\,{}_();\'\"$\t\n@%';
+// CR is a delimiter (FORMAT_SPEC S2.1): a multi-line event's template joins its lines with
+// the break each was read with, so CR sits between a line's last token and the next line.
+const TOKEN_DELIMS = '<>|. ][:-+/*=\\,{}_();\'\"$\t\n\r@%';
 const TOKEN_DELIM_SET = new Set(TOKEN_DELIMS.split(''));
 
 const VAR_PLACEHOLDER = '$';
-const CARRIAGE_RETURN = '\r';
 const VAR_ESCAPE = '/';
 const TIMESTAMP_PREFIX = '$(';
 const TIMESTAMP_POSTFIX = ')';
@@ -451,9 +452,7 @@ function parseTemplate(templateStr, timestampPatterns) {
       } else if (next === VAR_PLACEHOLDER) {
         if (varNameBuilder.length === 0) result = 'NON_INDEXED';
         break;
-      } else if (isTokenDelim(next) || next === CARRIAGE_RETURN) {
-        // A grouped event's template joins its lines with CR LF where the original had
-        // them, so a value that ends a line is followed by CR, which is no token delimiter.
+      } else if (isTokenDelim(next)) {
         if (varNameBuilder.length === 0) result = 'NON_INDEXED';
         break;
       } else {

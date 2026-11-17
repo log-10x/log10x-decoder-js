@@ -188,4 +188,16 @@ assert(esc.decode('~ps,1686917430521,host,4592') === '2023-06-16T12:10:30.521Z $
   "Escaped '$' after an escaped '/': a script's $( is text, not a timestamp");
 assert(esc.decode('~paths,tmp') === 'copy /$ to //tmp and /$1', "Runs of escaped '/' before '$'");
 
+// Test: a timestamp slot right before a CR (a CR LF or a lone CR between the lines of an
+// event). CR is a delimiter, so the timestamp's closing parenthesis is not template text.
+const tsCrTemplates = {
+  'crlf': "$ : $(yyyy-MM-dd'T'HH:mm:ss'Z')\r\nVersion : $",
+  'cr': "$ : $(yyyy-MM-dd'T'HH:mm:ss'Z')\rVersion : $",
+};
+const tsCr = createDecoder(tsCrTemplates, { delimiter: ',', prefix: '~', timezoneOffsetMinutes: 0 });
+assert(tsCr.decode('~crlf,1488916587000,LastOriginatingChange,4') === 'LastOriginatingChange : 2017-03-07T19:56:27Z\r\nVersion : 4',
+  'Timestamp right before CR LF');
+assert(tsCr.decode('~cr,1488916587000,LastOriginatingChange,4') === 'LastOriginatingChange : 2017-03-07T19:56:27Z\rVersion : 4',
+  'Timestamp right before a lone CR');
+
 console.log('\nAll tests passed.');
