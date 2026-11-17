@@ -205,7 +205,7 @@ function pad(n, len) {
  */
 function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
   // Epoch patterns — just return the number/string
-  if (pattern === 'epoch' || pattern === '+%s' || pattern === '+%s.%N') return String(epoch);
+  if (pattern === 'epoch' || pattern === '+%s' || pattern === '+%s.%N' || pattern === '+%s.%f') return String(epoch);
   if (pattern === 'epochNano') return String(epoch);
 
   // Handle string epochs (nanosecond precision preserved as string)
@@ -661,19 +661,54 @@ function parseTemplate(templateStr, timestampPatterns) {
     else if (currType === SEG_VAR) addVarSegment(currIdx);
   }
 
-  return { segments, timestampCount: timestamps.length };
+  return { segments, timestampCount: timestamps.length, timestampPatterns: timestamps.map((t) => t.pattern) };
 }
 
 // ─── Event Lexer ─────────────────────────────────────────────────────────────
+
+const SECONDS_FRACTION_RE = /^([0-9]{10})\.([0-9]{1,9})$/;
+const MILLIS_FRACTION_RE = /^([0-9]{1,18})(?:\.([0-9]{1,9}))?$/;
+
+/**
+ * The event time of an epoch read with a fraction, from its value text:
+ * - '+%s.%f': 10 digits of seconds, a dot, 1 to 9 fraction digits. Milliseconds (a
+ *   number) for 1 to 3 fraction digits, nanoseconds (a string of digits) for 4 to 9:
+ *   '1723042099.6' is 1723042099600 ms.
+ * - '+%s.%N': milliseconds, then an optional dot and 1 to 9 digits of a millisecond.
+ *   Nanoseconds (a string of digits, digits past the nanosecond dropped) with a
+ *   fraction, milliseconds (a number) without one.
+ * Never read through the magnitude rule of an integer epoch. A value of any other
+ * shape gives -1 (no time); its text is still written back.
+ * @param {string} text - The slot's value as encoded
+ * @param {string} pattern - '+%s.%f' or '+%s.%N'
+ * @returns {number|string}
+ */
+function epochFromText(text, pattern) {
+  if (pattern === '+%s.%f') {
+    const m = SECONDS_FRACTION_RE.exec(text);
+    if (!m) return -1;
+    const d = m[2].length;
+    if (d <= 3) return Number(m[1]) * 1000 + Number(m[2]) * 10 ** (3 - d);
+    return String(BigInt(m[1]) * 1000000000n + BigInt(m[2]) * 10n ** BigInt(9 - d));
+  }
+  const m = MILLIS_FRACTION_RE.exec(text);
+  if (!m) return -1;
+  if (m[2] === undefined) return m[1].length > 15 ? m[1] : Number(m[1]);
+  const d = m[2].length;
+  const nanos = d <= 6 ? BigInt(m[2]) * 10n ** BigInt(6 - d) : BigInt(m[2]) / 10n ** BigInt(d - 6);
+  return String(BigInt(m[1]) * 1000000n + nanos);
+}
 
 /**
  * Tokenizes an encoded event's values.
  * @param {string} input - Encoded values (without hash), delimiter-separated
  * @param {string} delimiter - Value delimiter (space or comma)
  * @param {number} timestampCount - Number of timestamps in the template
- * @returns {{ values: string[], timestampEpochs: number[] }}
+ * @param {string[]} [timestampPatterns] - The template's timestamp patterns, by index. An
+ *   epoch read with a fraction (+%s.%f, +%s.%N) gets its time from its text (epochFromText).
+ * @returns {{ values: string[], timestampEpochs: (number|string)[] }}
  */
-function tokenizeEvent(input, delimiter, timestampCount) {
+function tokenizeEvent(input, delimiter, timestampCount, timestampPatterns) {
   const chars = input.split('');
   const len = chars.length;
   const values = [];
@@ -686,6 +721,11 @@ function tokenizeEvent(input, delimiter, timestampCount) {
   let isNumber = true;
 
   function addTimestamp(start, end) {
+    const pattern = timestampPatterns && timestampPatterns[timestampEpochs.length];
+    if (pattern === '+%s.%f' || pattern === '+%s.%N') {
+      timestampEpochs.push(epochFromText(chars.slice(start, end).join(''), pattern));
+      return;
+    }
     let epoch = parseLong(chars, start, end, EMPTY);
     if (epoch === EMPTY) {
       // Try fractional epoch: ms.nano
@@ -757,7 +797,7 @@ function tokenizeEvent(input, delimiter, timestampCount) {
 
 // Patterns whose value is the epoch text read from the source: the value is written
 // back as it was encoded, with its fraction, dot and leading zeros, never through a number.
-const EPOCH_TEXT_PATTERNS = new Set(['epoch', 'epochNano', '+%s', '+%s.%N']);
+const EPOCH_TEXT_PATTERNS = new Set(['epoch', 'epochNano', '+%s', '+%s.%N', '+%s.%f']);
 
 /**
  * Renders one timestamp segment of a tokenized event. A date pattern formats the epoch;
@@ -847,7 +887,7 @@ function decodeSingle(encodedValues, templateStr, options) {
   }
 
   const template = parseTemplate(templateStr, patterns);
-  const event = tokenizeEvent(encodedValues, delimiter, template.timestampCount);
+  const event = tokenizeEvent(encodedValues, delimiter, template.timestampCount, template.timestampPatterns);
 
   let result = '';
   for (const seg of template.segments) {
@@ -927,7 +967,7 @@ function createDecoder(templates, options) {
     const template = getTemplate(hash);
     if (!template) return null; // template not found
 
-    const event = tokenizeEvent(values, delimiter, template.timestampCount);
+    const event = tokenizeEvent(values, delimiter, template.timestampCount, template.timestampPatterns);
 
     let result = '';
     for (const seg of template.segments) {
