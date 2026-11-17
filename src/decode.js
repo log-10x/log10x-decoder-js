@@ -303,17 +303,19 @@ function formatTimestamp(epoch, pattern, timezoneOffsetMinutes) {
         case 'd':
           result += count >= 2 ? dd : String(d);
           break;
+        // H, h, m and s follow DateTimeFormatter: one letter writes the number
+        // without padding (5), more letters pad it to that width (05).
         case 'H':
-          result += HH;
+          result += count === 1 ? String(date.getUTCHours()) : (count === 2 ? HH : pad(date.getUTCHours(), count));
           break;
         case 'h':
-          result += hh;
+          result += count === 1 ? String(hh12) : (count === 2 ? hh : pad(hh12, count));
           break;
         case 'm':
-          result += mm;
+          result += count === 1 ? String(date.getUTCMinutes()) : (count === 2 ? mm : pad(date.getUTCMinutes(), count));
           break;
         case 's':
-          result += ss;
+          result += count === 1 ? String(date.getUTCSeconds()) : (count === 2 ? ss : pad(date.getUTCSeconds(), count));
           break;
         case 'S':
           // Use nanoFractionStr for all precision levels
