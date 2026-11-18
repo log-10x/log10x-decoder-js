@@ -937,8 +937,9 @@ function createDecoder(templates, options) {
   function getTemplate(hash) {
     if (compiledTemplates.has(hash)) return compiledTemplates.get(hash);
 
-    const templateStr = templates[hash];
-    if (!templateStr) return null;
+    if (!Object.prototype.hasOwnProperty.call(templates, hash)) return null;
+    // An empty event's template is empty: its record holds no text (null)
+    const templateStr = templates[hash] || '';
 
     const compiled = parseTemplate(templateStr, patterns);
     compiledTemplates.set(hash, compiled);

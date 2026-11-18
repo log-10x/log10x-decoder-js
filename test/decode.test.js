@@ -214,4 +214,13 @@ assert(tsCr.decode('~crlf,1488916587000,LastOriginatingChange,4') === 'LastOrigi
 assert(tsCr.decode('~cr,1488916587000,LastOriginatingChange,4') === 'LastOriginatingChange : 2017-03-07T19:56:27Z\rVersion : 4',
   'Timestamp right before a lone CR');
 
+// An empty event's template is empty; the engine writes its template record with a
+// null template ({"templateHash":"-J}UrlyaKD8","template":null}). Its encoded line,
+// the hash alone, decodes to an empty line; a hash with no record is kept as read.
+const emptyTemplates = { 'h1': 'user $ logged in', '-J}UrlyaKD8': null };
+const emptyDec = createDecoder(emptyTemplates, { delimiter: ',', prefix: '~' });
+assert(emptyDec.decode('~-J}UrlyaKD8') === '', 'An empty event decodes to an empty line');
+assert(emptyDec.decode('~h1,alice') === 'user alice logged in', 'Beside an empty event');
+assert(emptyDec.decode('~nohash') === '~nohash', 'A hash with no record is kept as read');
+
 console.log('\nAll tests passed.');
